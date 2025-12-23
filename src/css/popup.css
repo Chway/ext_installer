@@ -1,0 +1,88 @@
+:root {
+	--bg: #0f0f0f;
+	--panel: #1a1a1a;
+	--text: #e0e0e0;
+	--muted: #9a9a9a;
+	--accent: #3b82f6;
+}
+
+body {
+	margin: 0;
+	width: 260px;
+	font-family: system-ui, sans-serif;
+	background: var(--bg);
+	color: var(--text);
+}
+
+header {
+	padding: 12px;
+	background: var(--panel);
+	border-bottom: 1px solid #262626;
+}
+
+.title {
+	font-weight: 600;
+	display: flex;
+	justify-content: center;
+	gap: 6px;
+}
+
+.version {
+	color: var(--muted);
+	font-weight: 400;
+}
+
+main {
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.primary {
+	background: var(--accent);
+	color: white;
+	border: none;
+	border-radius: 6px;
+	padding: 8px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.primary:hover {
+	filter: brightness(1.1);
+}
+
+.updates {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.updates li {
+	display: flex;
+	gap: 6px;
+	padding: 6px 0;
+	white-space: nowrap;
+}
+
+.updates li:not(.no-updates) {
+	cursor: pointer;
+}
+
+.updates li:hover:not(.no-updates) {
+	color: var(--muted);
+}
+
+.updates .name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.updates .ver {
+	color: var(--muted);
+	flex-shrink: 0;
+}

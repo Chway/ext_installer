@@ -1,0 +1,21 @@
+{
+	"name": "ext_installer",
+	"type": "module",
+	"version": "1.0.0",
+	"sideEffects": false,
+	"scripts": {
+		"build": "node build.mjs",
+		"build-chrome": "node build.mjs --chrome",
+		"build-firefox": "node build.mjs --firefox"
+	},
+	"dependencies": {
+		"compare-versions": "^6.1.1",
+		"lib-helpers": "*"
+	},
+	"devDependencies": {
+		"esbuild": "^0.25.9",
+		"esbuild-plugin-copy": "^2.1.1",
+		"globby": "^14.1.0",
+		"zip-a-folder": "^3.1.9"
+	}
+}

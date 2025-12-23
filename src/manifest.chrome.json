@@ -1,0 +1,15 @@
+{
+	"name": "ExtInstaller",
+	"description": "Install and update extensions from everywhere.",
+	"version": "1.0.0",
+	"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqLO2juIl+lgMw2hyKJnCNflU2XsZPRQ/oP+Fmg4Up6X0gFufnCuNLW10PtchDWv5t9syFYWYirR9aoByOBMuemLrlWzStA9WGpxgXacsoxoOpE7L6ezuzrwF0fD4HmWneWAzZti0KqM3moprn1zayJk359UtzWNG+Fnxso7ePQUZj2B+RVEBWL2kJ1IDzT1klccREDf0oigd2L/BsyW95m11ENMmlu2loh/9T3bCaC+hHnCp0FKwaxWhdNubGCZNBLr/Gq435yXHF26J3LOMSfPnZVTwuI0t2gYXTYWlWlexDN0ljTCm86kdzostpW1sHYeoB9bUoyDTYDbj0xgXZwIDAQAB",
+	"manifest_version": 3,
+	"background": {
+		"service_worker": "js/init.js"
+	},
+	"action": {
+		"default_popup": "popup.html"
+	},
+	"permissions": ["management", "storage", "contextMenus", "alarms", "downloads"],
+	"host_permissions": ["<all_urls>"]
+}
