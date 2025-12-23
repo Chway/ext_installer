@@ -60,6 +60,36 @@ export async function checkForUpdates() {
 	await storageSet({ extensions });
 }
 
+export async function downloadExt(url) {
+	async function dlOnChangedCb(downloadDelta) {
+		const { id, state } = downloadDelta;
+		if (id !== downloadId || !state?.current) return;
+
+		if (state.current === "complete" || state.current === "interrupted") {
+			chrome.downloads.onChanged.removeListener(dlOnChangedCb);
+			await chrome.alarms.clear(`timeout-dl-${downloadId}`);
+			await chrome.downloads.erase({ id: downloadId }).catch(() => {});
+		}
+	}
+
+	let downloadId;
+	try {
+		chrome.downloads.onChanged.addListener(dlOnChangedCb);
+		downloadId = await chrome.downloads.download({ saveAs: false, url: url });
+
+		if (!downloadId) {
+			throw new Error("Download did not return an Id.");
+		}
+
+		await chrome.alarms.create(`timeout-dl-${downloadId}`, { delayInMinutes: 1 });
+	} catch (error) {
+		chrome.downloads.onChanged.removeListener(dlOnChangedCb);
+		await chrome.downloads.erase({ id: downloadId }).catch(() => {});
+
+		console.warn(error.message);
+	}
+}
+
 export function generateUrl(action = "install", { hostname, id, updateUrl, version } = {}) {
 	const chromeVersion = getChromeVer();
 
@@ -105,42 +135,10 @@ export function getExtInfosFromUrl(url) {
 	};
 }
 
-export async function installExt(url, isUpdate = false) {
-	async function dlOnChangedCb(downloadDelta) {
-		const { id, state } = downloadDelta;
-		if (id !== downloadId || !state?.current) return;
-
-		if (state.current === "complete" || state.current === "interrupted") {
-			chrome.downloads.onChanged.removeListener(dlOnChangedCb);
-			await chrome.alarms.clear(`timeout-dl-${downloadId}`);
-			await chrome.downloads.erase({ id: downloadId }).catch(() => {});
-		}
-	}
-
-	let downloadId;
-	let downloadUrl;
-	try {
-		if (isUpdate) {
-			downloadUrl = url;
-		} else {
-			const { hostname, id } = getExtInfosFromUrl(url);
-			downloadUrl = generateUrl("install", { hostname, id });
-		}
-
-		chrome.downloads.onChanged.addListener(dlOnChangedCb);
-		downloadId = await chrome.downloads.download({ saveAs: false, url: downloadUrl });
-
-		if (!downloadId) {
-			throw new Error("Download did not return an Id.");
-		}
-
-		await chrome.alarms.create(`timeout-dl-${downloadId}`, { delayInMinutes: 1 });
-	} catch (error) {
-		chrome.downloads.onChanged.removeListener(dlOnChangedCb);
-		await chrome.downloads.erase({ id: downloadId }).catch(() => {});
-
-		console.warn(error.message);
-	}
+export async function installExt(url) {
+	const { hostname, id } = getExtInfosFromUrl(url);
+	const downloadUrl = generateUrl("install", { hostname, id });
+	await downloadExt(downloadUrl);
 }
 
 export async function setExtensionsState(id) {
@@ -197,7 +195,7 @@ export async function updateExt(id) {
 		}
 
 		if (extensions[id].newUrl) {
-			await installExt(extensions[id].newUrl, true);
+			await downloadExt(extensions[id].newUrl);
 		} else {
 			throw new Error(`No update found for "${extensions[id].shortName}".`);
 		}
