@@ -105,7 +105,7 @@ export function getExtInfosFromUrl(url) {
 	};
 }
 
-export async function installExt(url) {
+export async function installExt(url, isUpdate = false) {
 	async function dlOnChangedCb(downloadDelta) {
 		const { id, state } = downloadDelta;
 		if (id !== downloadId || !state?.current) return;
@@ -120,8 +120,12 @@ export async function installExt(url) {
 	let downloadId;
 	let downloadUrl;
 	try {
-		const { hostname, id } = getExtInfosFromUrl(url);
-		downloadUrl = generateUrl("install", { hostname, id });
+		if (isUpdate) {
+			downloadUrl = url;
+		} else {
+			const { hostname, id } = getExtInfosFromUrl(url);
+			downloadUrl = generateUrl("install", { hostname, id });
+		}
 
 		chrome.downloads.onChanged.addListener(dlOnChangedCb);
 		downloadId = await chrome.downloads.download({ saveAs: false, url: downloadUrl });
@@ -193,7 +197,7 @@ export async function updateExt(id) {
 		}
 
 		if (extensions[id].newUrl) {
-			await installExt(extensions[id].newUrl);
+			await installExt(extensions[id].newUrl, true);
 		} else {
 			throw new Error(`No update found for "${extensions[id].shortName}".`);
 		}
