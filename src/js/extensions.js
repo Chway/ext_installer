@@ -227,6 +227,15 @@ export async function setStateFor(id, state) {
 	});
 }
 
+export async function remStateFor(id) {
+	return await navigator.locks.request("states", async () => {
+		const { states = {} } = await storageGet("states");
+		delete states[id];
+
+		return await storageSet({ states });
+	});
+}
+
 export async function updateExt(id) {
 	let hasInstalled = false;
 	const { extensions = {} } = await storageGet("extensions");
@@ -242,6 +251,7 @@ export async function updateExt(id) {
 		if (extensions[id].newUrl) {
 			await setStateFor(id, "downloading");
 			await downloadExt(extensions[id].newUrl);
+
 			await setStateFor(id, "updating");
 
 			hasInstalled = await versionMatch(id, extensions[id].newVer);
@@ -250,13 +260,14 @@ export async function updateExt(id) {
 		}
 	} catch (error) {
 		console.warn(error.message);
+
+		if ((await getStateFor(id)) === "downloading") {
+			await setStateFor(id, "idling");
+		}
 	} finally {
 		// the user might cancel or the browser can take time to update the extension, give it 2 minutes and reset the state
-		const state = await getStateFor(id);
 		if (!hasInstalled) {
 			await chrome.alarms.create(`timeout-upd-${id}`, { delayInMinutes: 2 });
-		} else if (state === "downloading") {
-			await setStateFor(id, "idling");
 		}
 	}
 }

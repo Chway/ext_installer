@@ -1,4 +1,12 @@
-import { checkForUpdates, installExt, setExtensionsState, updateExt, setStateFor, getStateFor } from "./extensions.js";
+import {
+	checkForUpdates,
+	installExt,
+	setExtensionsState,
+	updateExt,
+	setStateFor,
+	getStateFor,
+	remStateFor,
+} from "./extensions.js";
 import { storageGet, storageSet, writeBadge } from "./utils.js";
 
 export async function alarmsOnAlarmCb(alarm) {
@@ -43,6 +51,8 @@ export async function managementOnUninstalledCb(id) {
 		delete extensions[id];
 		await storageSet({ extensions });
 	}
+
+	await remStateFor(id);
 }
 
 export function runtimeOnMessageCb(message, _sender, sendResponse) {
