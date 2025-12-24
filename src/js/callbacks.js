@@ -106,7 +106,8 @@ export async function setup({ context } = {}) {
 }
 
 export async function storageOnChangedCb(changes, _areaName) {
-	if (Object.keys(changes).includes("extensions")) {
+	const changesKeys = Object.keys(changes);
+	if (changesKeys.includes("extensions") || changesKeys.includes("states")) {
 		await writeBadge();
 	} else if (Object.keys(changes).includes("states")) {
 		// const { states } = await storageGet("states");
