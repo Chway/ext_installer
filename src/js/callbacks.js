@@ -43,7 +43,7 @@ export async function managementOnUninstalledCb(id) {
 export function runtimeOnMessageCb(message, _sender, sendResponse) {
 	async function handler() {
 		switch (message.action) {
-			case "check-update": {
+			case "check-updates": {
 				try {
 					await checkForUpdates();
 					sendResponse({ err: null, ok: true });

@@ -86,3 +86,13 @@ main {
 	color: var(--muted);
 	flex-shrink: 0;
 }
+
+.waiting {
+	cursor: wait;
+	pointer-events: auto;
+	opacity: 0.6;
+}
+
+.waiting * {
+	pointer-events: none;
+}

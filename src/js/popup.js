@@ -1,5 +1,8 @@
-import { storageGet } from "lib-helpers";
+import { storageGet } from "./utils.js";
 
+const elementState = new WeakMap();
+
+const checkUpdates = document.querySelector(".check-updates");
 const updatesContainer = document.querySelector(".updates");
 const template = document.querySelector("#extension-template");
 const noUpdates = updatesContainer.querySelector(".no-updates");
@@ -8,17 +11,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 	await main();
 });
 
+async function checkUpdatesCb(event) {
+	const element = event.currentTarget;
+	const state = elementState.get(element);
+	if (state?.disabled) return;
+
+	setElementDisable(element);
+
+	try {
+		const { ok } = await chrome.runtime.sendMessage({ action: "check-updates" });
+		if (!ok) return;
+
+		await writeList();
+	} catch {
+		//
+	} finally {
+		setElementDisable(element, true);
+	}
+}
+
 async function main() {
 	const elVersion = document.querySelector(".version");
-	elVersion.textContent = chrome.runtime.getManifest().version;
+	elVersion.textContent = `v${chrome.runtime.getManifest().version}`;
 
+	checkUpdates.addEventListener("click", checkUpdatesCb);
 	await writeList();
+}
+
+function setElementDisable(element, enable = false) {
+	elementState.set(element, { disabled: !enable });
+	element.classList.toggle("waiting", !enable);
 }
 
 async function updateExt(event) {
 	const element = event.currentTarget;
-	element.style.pointerEvents = "none";
-	element.style.cursor = "wait";
+	const state = elementState.get(element);
+	if (state?.disabled) return;
+
+	setElementDisable(element);
 
 	try {
 		const { id } = element.dataset;
@@ -26,8 +56,7 @@ async function updateExt(event) {
 	} catch {
 		// pass
 	} finally {
-		element.style.pointerEvents = "auto";
-		element.style.cursor = "pointer";
+		setElementDisable(element, true);
 	}
 }
 
