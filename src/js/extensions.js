@@ -1,6 +1,7 @@
 import { compare } from "compare-versions";
 
 import { getChromeVer, isUpToDate, storageGet, storageSet } from "./utils.js";
+import { DEBUG } from "./init.js";
 
 const BASE_URLS = {
 	"chromewebstore.google.com": "https://clients2.google.com/service/update2/crx",
@@ -11,7 +12,7 @@ export async function checkForUpdates() {
 	const { extensions = {} } = await storageGet("extensions");
 
 	for (const [id, obj] of Object.entries(extensions)) {
-		if (!obj.updateUrl || (await getStateFor(id)) !== "idling") continue;
+		if (!obj.updateUrl) continue;
 
 		try {
 			const url = generateUrl("update", { id, updateUrl: obj.updateUrl, version: obj.version });
@@ -168,7 +169,6 @@ export async function setExtensionsState(id, isInstall = false) {
 
 	if (id && isInstall) {
 		await chrome.alarms.clear(`timeout-upd-${id}`);
-		await setStateFor(id, "idling");
 	}
 
 	const { extensions = {} } = await storageGet("extensions");
@@ -176,10 +176,6 @@ export async function setExtensionsState(id, isInstall = false) {
 
 	for (const ext of exts) {
 		if (ext.type !== "extension") continue;
-
-		if ((await getStateFor(ext.id)) === null) {
-			await setStateFor(ext.id, "idling");
-		}
 
 		try {
 			const newVer = extensions[ext.id]?.newVer ?? null;
@@ -211,31 +207,6 @@ export async function setExtensionsState(id, isInstall = false) {
 	await storageSet({ extensions: id ? { ...extensions, ...tempExtensions } : tempExtensions });
 }
 
-export async function getStateFor(id) {
-	return await navigator.locks.request("states", async () => {
-		const { states = {} } = await storageGet("states");
-
-		return states[id] ?? null;
-	});
-}
-
-export async function setStateFor(id, state) {
-	return await navigator.locks.request("states", async () => {
-		const { states = {} } = await storageGet("states");
-
-		return await storageSet({ states: { ...states, [id]: state } });
-	});
-}
-
-export async function remStateFor(id) {
-	return await navigator.locks.request("states", async () => {
-		const { states = {} } = await storageGet("states");
-		delete states[id];
-
-		return await storageSet({ states });
-	});
-}
-
 export async function updateExt(id) {
 	let hasInstalled = false;
 	const { extensions = {} } = await storageGet("extensions");
@@ -243,16 +214,9 @@ export async function updateExt(id) {
 		throw new Error(`Id "${id}" not in storage.`);
 	}
 
-	if ((await getStateFor(id)) === "downloading") {
-		throw new Error(`Id "${id}" is already downloading.`);
-	}
-
 	try {
 		if (extensions[id].newUrl) {
-			await setStateFor(id, "downloading");
 			await downloadExt(extensions[id].newUrl);
-
-			await setStateFor(id, "updating");
 
 			hasInstalled = await versionMatch(id, extensions[id].newVer);
 		} else {
@@ -260,10 +224,6 @@ export async function updateExt(id) {
 		}
 	} catch (error) {
 		console.warn(error.message);
-
-		if ((await getStateFor(id)) === "downloading") {
-			await setStateFor(id, "idling");
-		}
 	} finally {
 		// the user might cancel or the browser can take time to update the extension, give it 2 minutes and reset the state
 		if (!hasInstalled) {

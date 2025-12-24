@@ -1,5 +1,7 @@
 import * as cb from "./callbacks.js";
 
+export const DEBUG = true;
+
 chrome.runtime.onInstalled.addListener(() => cb.setup({ context: "onInstalled" }));
 chrome.runtime.onStartup.addListener(() => cb.setup({ context: "onStartup" }));
 chrome.runtime.onMessage.addListener(cb.runtimeOnMessageCb);

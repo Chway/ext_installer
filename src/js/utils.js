@@ -40,8 +40,8 @@ export async function storageSet(data) {
 }
 
 export async function writeBadge() {
-	const { extensions = {}, states = {} } = await storageGet(["extensions", "states"]);
-	const updates = Object.values(extensions).filter((e) => e.newVer && states[e.id] === "idling");
+	const { extensions = {} } = await storageGet("extensions");
+	const updates = Object.values(extensions).filter((e) => e.newVer);
 
 	const count = updates.length;
 
