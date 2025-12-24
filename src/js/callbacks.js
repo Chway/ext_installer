@@ -1,4 +1,4 @@
-import { checkForUpdates, installExt, setExtensionsState, updateExt } from "./extensions.js";
+import { checkForUpdates, installExt, setExtensionsState, updateExt, setStateFor, getStateFor } from "./extensions.js";
 import { storageGet, storageSet, writeBadge } from "./utils.js";
 
 export async function alarmsOnAlarmCb(alarm) {
@@ -15,6 +15,11 @@ export async function alarmsOnAlarmCb(alarm) {
 
 			return;
 		}
+	} else if (alarm.name.startsWith("timeout-upd-")) {
+		const id = alarm.name.replace("timeout-upd-", "");
+		if ((await getStateFor(id)) === "updating") {
+			await setStateFor(id, "idling");
+		}
 	}
 }
 
@@ -29,7 +34,7 @@ export async function managementOnEnabledCb(info) {
 }
 
 export async function managementOnInstalledCb(info) {
-	await setExtensionsState(info.id);
+	await setExtensionsState(info.id, true);
 }
 
 export async function managementOnUninstalledCb(id) {
@@ -103,5 +108,8 @@ export async function setup({ context } = {}) {
 export async function storageOnChangedCb(changes, _areaName) {
 	if (Object.keys(changes).includes("extensions")) {
 		await writeBadge();
+	} else if (Object.keys(changes).includes("states")) {
+		// const { states } = await storageGet("states");
+		// console.log(states);
 	}
 }

@@ -1,3 +1,5 @@
+import { compare } from "compare-versions";
+
 import { getChromeVer, isUpToDate, storageGet, storageSet } from "./utils.js";
 
 const BASE_URLS = {
@@ -9,7 +11,7 @@ export async function checkForUpdates() {
 	const { extensions = {} } = await storageGet("extensions");
 
 	for (const [id, obj] of Object.entries(extensions)) {
-		if (!obj.updateUrl) continue;
+		if (!obj.updateUrl || (await getStateFor(id)) !== "idling") continue;
 
 		try {
 			const url = generateUrl("update", { id, updateUrl: obj.updateUrl, version: obj.version });
@@ -61,33 +63,46 @@ export async function checkForUpdates() {
 }
 
 export async function downloadExt(url) {
-	async function dlOnChangedCb(downloadDelta) {
-		const { id, state } = downloadDelta;
-		if (id !== downloadId || !state?.current) return;
+	return new Promise((resolve, reject) => {
+		let downloadId;
 
-		if (state.current === "complete" || state.current === "interrupted") {
-			chrome.downloads.onChanged.removeListener(dlOnChangedCb);
-			await chrome.alarms.clear(`timeout-dl-${downloadId}`);
-			await chrome.downloads.erase({ id: downloadId }).catch(() => {});
+		function dlOnChangedCb(downloadDelta) {
+			const { id, state } = downloadDelta;
+			if (id !== downloadId || !state?.current) return;
+
+			if (state.current === "complete" || state.current === "interrupted") {
+				chrome.downloads.onChanged.removeListener(dlOnChangedCb);
+				chrome.alarms.clear(`timeout-dl-${downloadId}`).catch(() => {});
+				chrome.downloads.erase({ id: downloadId }).catch(() => {});
+			}
+
+			if (state.current === "complete") {
+				resolve();
+			} else if (state.current === "interrupted") {
+				reject(new Error("Download interrupted."));
+			}
 		}
-	}
 
-	let downloadId;
-	try {
 		chrome.downloads.onChanged.addListener(dlOnChangedCb);
-		downloadId = await chrome.downloads.download({ saveAs: false, url: url });
+		chrome.downloads
+			.download({ saveAs: false, url })
+			.then((id) => {
+				downloadId = id;
+				if (!downloadId) throw new Error("Download did not return an Id.");
 
-		if (!downloadId) {
-			throw new Error("Download did not return an Id.");
-		}
+				return chrome.alarms.create(`timeout-dl-${downloadId}`, { delayInMinutes: 1 });
+			})
+			.catch((error) => {
+				chrome.downloads.onChanged.removeListener(dlOnChangedCb);
 
-		await chrome.alarms.create(`timeout-dl-${downloadId}`, { delayInMinutes: 1 });
-	} catch (error) {
-		chrome.downloads.onChanged.removeListener(dlOnChangedCb);
-		await chrome.downloads.erase({ id: downloadId }).catch(() => {});
+				if (downloadId) {
+					chrome.downloads.erase({ id: downloadId }).catch(() => {});
+				}
 
-		console.warn(error.message);
-	}
+				console.warn(error.message);
+				reject(error);
+			});
+	});
 }
 
 export function generateUrl(action = "install", { hostname, id, updateUrl, version } = {}) {
@@ -141,7 +156,7 @@ export async function installExt(url) {
 	await downloadExt(downloadUrl);
 }
 
-export async function setExtensionsState(id) {
+export async function setExtensionsState(id, isInstall = false) {
 	let exts;
 	try {
 		exts = id ? [await chrome.management.get(id)] : await chrome.management.getAll();
@@ -151,11 +166,20 @@ export async function setExtensionsState(id) {
 		return;
 	}
 
+	if (id && isInstall) {
+		await chrome.alarms.clear(`timeout-upd-${id}`);
+		await setStateFor(id, "idling");
+	}
+
 	const { extensions = {} } = await storageGet("extensions");
 	const tempExtensions = {};
 
 	for (const ext of exts) {
 		if (ext.type !== "extension") continue;
+
+		if ((await getStateFor(ext.id)) === null) {
+			await setStateFor(ext.id, "idling");
+		}
 
 		try {
 			const newVer = extensions[ext.id]?.newVer ?? null;
@@ -187,19 +211,64 @@ export async function setExtensionsState(id) {
 	await storageSet({ extensions: id ? { ...extensions, ...tempExtensions } : tempExtensions });
 }
 
-export async function updateExt(id) {
-	try {
-		const { extensions = {} } = await storageGet("extensions");
-		if (!extensions[id]) {
-			throw new Error(`Id "${id}" not in storage.`);
-		}
+export async function getStateFor(id) {
+	return await navigator.locks.request("states", async () => {
+		const { states = {} } = await storageGet("states");
 
+		return states[id] ?? null;
+	});
+}
+
+export async function setStateFor(id, state) {
+	return await navigator.locks.request("states", async () => {
+		const { states = {} } = await storageGet("states");
+
+		return await storageSet({ states: { ...states, [id]: state } });
+	});
+}
+
+export async function updateExt(id) {
+	let hasInstalled = false;
+	const { extensions = {} } = await storageGet("extensions");
+	if (!extensions[id]) {
+		throw new Error(`Id "${id}" not in storage.`);
+	}
+
+	if ((await getStateFor(id)) === "downloading") {
+		throw new Error(`Id "${id}" is already downloading.`);
+	}
+
+	try {
 		if (extensions[id].newUrl) {
+			await setStateFor(id, "downloading");
 			await downloadExt(extensions[id].newUrl);
+			await setStateFor(id, "updating");
+
+			hasInstalled = await versionMatch(id, extensions[id].newVer);
 		} else {
 			throw new Error(`No update found for "${extensions[id].shortName}".`);
 		}
 	} catch (error) {
 		console.warn(error.message);
+	} finally {
+		// the user might cancel or the browser can take time to update the extension, give it 2 minutes and reset the state
+		const state = await getStateFor(id);
+		if (!hasInstalled) {
+			await chrome.alarms.create(`timeout-upd-${id}`, { delayInMinutes: 2 });
+		} else if (state === "downloading") {
+			await setStateFor(id, "idling");
+		}
+	}
+}
+
+async function versionMatch(id, version) {
+	try {
+		const ext = await chrome.management.get(id);
+
+		return ext.version === version || compare(ext.version, version, "=");
+	} catch (error) {
+		console.warn(error.message);
+
+		return false;
 	}
 }
