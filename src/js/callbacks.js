@@ -15,6 +15,10 @@ export async function alarmsOnAlarmCb(alarm) {
 
 			return;
 		}
+	} else if (alarm.name.startsWith("timeout-pending-")) {
+		const id = alarm.name.replace("timeout-pending-", "");
+		const { extensions } = await storageGet("extensions");
+		await storageSet({ extensions: { ...extensions, [id]: { ...extensions[id], pending: null } } });
 	}
 }
 
@@ -45,7 +49,7 @@ export function runtimeOnMessageCb(message, _sender, sendResponse) {
 		switch (message.action) {
 			case "check-updates": {
 				try {
-					await checkForUpdates();
+					await checkForUpdates(true);
 					sendResponse({ err: null, ok: true });
 				} catch (error) {
 					sendResponse({ err: error.message, ok: false });

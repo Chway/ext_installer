@@ -1,15 +1,21 @@
-import { compare } from "compare-versions";
-
 import { getChromeVer, isUpToDate, storageGet, storageSet } from "./utils.js";
-import { DEBUG } from "./init.js";
 
 const BASE_URLS = {
 	"chromewebstore.google.com": "https://clients2.google.com/service/update2/crx",
 	"microsoftedge.microsoft.com": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
 };
 
-export async function checkForUpdates() {
+export async function checkForUpdates(manual = false) {
 	const { extensions = {} } = await storageGet("extensions");
+
+	const pending = Object.values(extensions).filter((e) => e.pending);
+	if (pending.length > 0) {
+		if (!manual) {
+			await chrome.alarms.create("check-updates", { delayInMinutes: 1, periodInMinutes: 180 });
+		}
+
+		return;
+	}
 
 	for (const [id, obj] of Object.entries(extensions)) {
 		if (!obj.updateUrl) continue;
@@ -168,7 +174,7 @@ export async function setExtensionsState(id, isInstall = false) {
 	}
 
 	if (id && isInstall) {
-		await chrome.alarms.clear(`timeout-upd-${id}`);
+		await chrome.alarms.clear(`timeout-pending-${id}`);
 	}
 
 	const { extensions = {} } = await storageGet("extensions");
@@ -198,6 +204,7 @@ export async function setExtensionsState(id, isInstall = false) {
 				shortName: ext.shortName,
 				updateUrl: ext.updateUrl ?? null,
 				version: ext.version,
+				pending: localIsUTD ? null : (ext.pending ?? null),
 			};
 		} catch (error) {
 			console.warn(`Failed to process extension "${ext.name}" (${ext.id}): ${error.message}`);
@@ -208,38 +215,32 @@ export async function setExtensionsState(id, isInstall = false) {
 }
 
 export async function updateExt(id) {
-	let hasInstalled = false;
-	const { extensions = {} } = await storageGet("extensions");
-	if (!extensions[id]) {
+	let { extensions } = await storageGet("extensions");
+	if (!extensions?.[id]) {
 		throw new Error(`Id "${id}" not in storage.`);
 	}
 
-	try {
-		if (extensions[id].newUrl) {
-			await downloadExt(extensions[id].newUrl);
-
-			hasInstalled = await versionMatch(id, extensions[id].newVer);
-		} else {
-			throw new Error(`No update found for "${extensions[id].shortName}".`);
-		}
-	} catch (error) {
-		console.warn(error.message);
-	} finally {
-		// the user might cancel or the browser can take time to update the extension, give it 2 minutes and reset the state
-		if (!hasInstalled) {
-			await chrome.alarms.create(`timeout-upd-${id}`, { delayInMinutes: 2 });
-		}
+	const ext = extensions[id];
+	if (!ext.newUrl) {
+		throw new Error(`No update found for "${ext.shortName}".`);
 	}
-}
 
-async function versionMatch(id, version) {
+	if (ext.pending) {
+		throw new Error(`An installation is pending for ${ext.shortName}.`);
+	}
+
 	try {
-		const ext = await chrome.management.get(id);
+		await storageSet({ extensions: { ...extensions, [id]: { ...extensions[id], pending: ext.newVer } } });
+		await downloadExt(ext.newUrl);
 
-		return ext.version === version || compare(ext.version, version, "=");
+		await chrome.alarms.create(`timeout-pending-${id}`, { delayInMinutes: 1 });
 	} catch (error) {
 		console.warn(error.message);
 
-		return false;
+		({ extensions } = await storageGet("extensions"));
+		await storageSet({ extensions: { ...extensions, [id]: { ...extensions[id], pending: null } } });
+		await chrome.alarms.clear(`timeout-pending-${id}`);
+
+		throw error;
 	}
 }

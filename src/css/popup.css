@@ -68,11 +68,11 @@ main {
 	white-space: nowrap;
 }
 
-.updates li:not(.no-updates) {
+.updates li:not(.no-updates):not(.pending) {
 	cursor: pointer;
 }
 
-.updates li:hover:not(.no-updates) {
+.updates li:hover:not(.no-updates):not(.pending) {
 	color: var(--muted);
 }
 
@@ -85,6 +85,11 @@ main {
 .updates .ver {
 	color: var(--muted);
 	flex-shrink: 0;
+}
+
+.pending {
+	opacity: 0.33;
+	cursor: not-allowed;
 }
 
 .waiting {

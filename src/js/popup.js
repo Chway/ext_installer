@@ -77,10 +77,15 @@ async function writeList() {
 			const clone = template.content.cloneNode(true);
 			const li = clone.querySelector("li");
 			li.dataset.id = obj.id;
-			li.addEventListener("click", updateExt);
 			li.querySelector(".name").textContent = obj.shortName;
 			li.querySelector(".name").title = obj.name;
 			li.querySelector(".ver").textContent = `(${obj.newVer})`;
+
+			if (obj.pending) {
+				li.classList.add("pending");
+			} else {
+				li.addEventListener("click", updateExt);
+			}
 
 			updatesContainer.append(li);
 		}
