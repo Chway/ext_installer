@@ -3,6 +3,7 @@ import { getChromeVer, isUpToDate, storageGet, storageSet } from "./utils.js";
 const BASE_URLS = {
 	"chromewebstore.google.com": "https://clients2.google.com/service/update2/crx",
 	"microsoftedge.microsoft.com": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+	"edge.microsoft.com": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
 };
 
 export async function checkForUpdates(manual = false) {
@@ -231,7 +232,15 @@ export async function updateExt(id) {
 
 	try {
 		await storageSet({ extensions: { ...extensions, [id]: { ...extensions[id], pending: ext.newVer } } });
-		await downloadExt(ext.newUrl);
+
+		// hack for edge store
+		const hostname = new URL(ext.updateUrl).hostname;
+		const downloadUrl = generateUrl("install", { hostname, id });
+		await downloadExt(downloadUrl);
+		// end hack
+
+		// await downloadExt(ext.newUrl);
+		// await chrome.tabs.create({ url: ext.newUrl });
 
 		await chrome.alarms.create(`timeout-pending-${id}`, { delayInMinutes: 1 });
 	} catch (error) {
