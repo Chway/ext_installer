@@ -2,6 +2,7 @@ import { getChromeVer, isUpToDate, storageGet, storageSet } from "./utils.js";
 
 const BASE_URLS = {
 	"chromewebstore.google.com": "https://clients2.google.com/service/update2/crx",
+	"clients2.google.com": "https://clients2.google.com/service/update2/crx",
 	"microsoftedge.microsoft.com": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
 	"edge.microsoft.com": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
 };
@@ -222,7 +223,7 @@ export async function updateExt(id) {
 	}
 
 	const ext = extensions[id];
-	if (!ext.newUrl) {
+	if (!ext.newVer) {
 		throw new Error(`No update found for "${ext.shortName}".`);
 	}
 
@@ -233,14 +234,17 @@ export async function updateExt(id) {
 	try {
 		await storageSet({ extensions: { ...extensions, [id]: { ...extensions[id], pending: ext.newVer } } });
 
-		// hack for edge store
 		const hostname = new URL(ext.updateUrl).hostname;
-		const downloadUrl = generateUrl("install", { hostname, id });
-		await downloadExt(downloadUrl);
-		// end hack
+		let downloadUrl;
+		if (hostname in BASE_URLS) {
+			downloadUrl = generateUrl("install", { hostname, id });
+		} else if (ext.newUrl) {
+			downloadUrl = ext.newUrl;
+		} else {
+			throw new Error(`No valid URL for "${ext.shortName}".`);
+		}
 
-		// await downloadExt(ext.newUrl);
-		// await chrome.tabs.create({ url: ext.newUrl });
+		await downloadExt(downloadUrl);
 
 		await chrome.alarms.create(`timeout-pending-${id}`, { delayInMinutes: 1 });
 	} catch (error) {
